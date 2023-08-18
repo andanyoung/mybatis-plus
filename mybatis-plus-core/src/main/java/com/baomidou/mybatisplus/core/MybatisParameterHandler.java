@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2022, baomidou (jobob@qq.com).
+ * Copyright (c) 2011-2023, baomidou (jobob@qq.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,7 +182,7 @@ public class MybatisParameterHandler implements ParameterHandler {
      * </p>
      *
      * @return 集合参数
-     * @deprecated 3.5.3
+     * @deprecated 3.5.3.2
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     @Deprecated

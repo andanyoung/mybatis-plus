@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2022, baomidou (jobob@qq.com).
+ * Copyright (c) 2011-2023, baomidou (jobob@qq.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -418,6 +418,14 @@ public class TableField {
                 this.jdbcType = column.getJdbcType();
                 this.typeName = column.getTypeName();
             }
+        }
+
+        public String getTableName() {
+            return tableName;
+        }
+
+        public String getColumnName() {
+            return columnName;
         }
 
         public int getLength() {

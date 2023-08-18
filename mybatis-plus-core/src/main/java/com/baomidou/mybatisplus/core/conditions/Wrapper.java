@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2022, baomidou (jobob@qq.com).
+ * Copyright (c) 2011-2023, baomidou (jobob@qq.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,6 +159,8 @@ public abstract class Wrapper<T> implements ISqlSegment {
             case NOT_NULL:
                 return Objects.nonNull(tableInfo.getPropertyValue(entity, e.getProperty()));
             case IGNORED:
+                return true;
+            case ALWAYS:
                 return true;
             case NOT_EMPTY:
                 return StringUtils.checkValNotNull(tableInfo.getPropertyValue(entity, e.getProperty()));

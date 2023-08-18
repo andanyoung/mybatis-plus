@@ -128,6 +128,17 @@ class H2UserTest extends BaseTest {
         Assertions.assertNotNull(h2User);
     }
 
+
+    @Test
+    @Order(7)
+    void testLambdaTypeHandler() {
+        // 演示 json 格式 Wrapper TypeHandler 查询
+        H2User h2User = userService.getOne(Wrappers.<H2User>lambdaQuery()
+            .apply("name={0,typeHandler=" + H2userNameJsonTypeHandler.class.getCanonicalName() + "}",
+                "{\"id\":101,\"name\":\"Tomcat\"}"));
+        Assertions.assertNotNull(h2User);
+    }
+
     @Test
     @Order(10)
     void testEntityWrapperSelectSql() {
@@ -617,6 +628,7 @@ class H2UserTest extends BaseTest {
         Page page = Page.of(1, -1);
         userService.lambdaQuery().page(page);
         Assertions.assertEquals(page.getTotal(), 0);
+        Assertions.assertEquals(userService.lambdaQuery().list(Page.of(1, -1, false)).size(), page.getRecords().size());
     }
 
     @Test
@@ -747,7 +759,7 @@ class H2UserTest extends BaseTest {
     }
 
     @Test
-    void testUpdateFill(){
+    void testUpdateFill() {
         Map<String, Object> map;
         H2User h2User;
         h2User = new H2User();
@@ -769,6 +781,49 @@ class H2UserTest extends BaseTest {
         h2StudentMapper.updateFillByCustomMethod4(Arrays.asList(1L, 2L, 3L), h2User);
         Assertions.assertNotNull(h2User.getLastUpdatedDt());
 
+    }
+
+    @Test
+    void testListMapsByPage() {
+        Assertions.assertEquals(userService.listMaps().size(), userService.count());
+        Assertions.assertEquals(userService.listMaps(new Page<>(1, 2)).size(), userService.page(new Page<>(1, 2)).getRecords().size());
+        Assertions.assertEquals(userService.listMaps(new Page<>(2, 2)).size(), userService.page(new Page<>(2, 2)).getRecords().size());
+
+        Assertions.assertEquals(
+            userService.pageMaps(new Page<>(1, 2, false)).getRecords().size(),
+            userService.listMaps(new Page<>(1, 2, false)).size()
+        );
+        Assertions.assertEquals(
+            userService.pageMaps(new Page<>(2, 2, false)).getRecords().size(),
+            userService.listMaps(new Page<>(2, 2, false)).size()
+        );
+
+        Assertions.assertEquals(
+            userService.pageMaps(new Page<>(1, 2, false), Wrappers.emptyWrapper()).getRecords().size(),
+            userService.listMaps(new Page<>(1, 2, false), Wrappers.emptyWrapper()).size()
+        );
+        Assertions.assertEquals(
+            userService.pageMaps(new Page<>(2, 2, false), Wrappers.emptyWrapper()).getRecords().size(),
+            userService.listMaps(new Page<>(2, 2, false), Wrappers.emptyWrapper()).size()
+        );
+    }
+
+    @Test
+    void testListByPage() {
+        Assertions.assertEquals(userService.list().size(), userService.count());
+        Assertions.assertEquals(userService.list(new Page<>(1, 2)).size(), userService.page(new Page<>(1, 2)).getRecords().size());
+        Assertions.assertEquals(userService.list(new Page<>(2, 2)).size(), userService.page(new Page<>(2, 2)).getRecords().size());
+        Assertions.assertEquals(
+            userService.list(new Page<>(1, 2, false), Wrappers.emptyWrapper()).size(),
+            userService.page(new Page<>(1, 2, false), Wrappers.emptyWrapper()).getRecords().size()
+        );
+
+        List<H2User> list = userService.list(new Page<>(2, 2, false));
+
+        Assertions.assertEquals(
+            userService.list(new Page<>(2, 2, false), Wrappers.emptyWrapper()).size(),
+            userService.page(new Page<>(2, 2, false), Wrappers.emptyWrapper()).getRecords().size()
+        );
     }
 
 }

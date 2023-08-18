@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2022, baomidou (jobob@qq.com).
+ * Copyright (c) 2011-2023, baomidou (jobob@qq.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package com.baomidou.mybatisplus.core;
 
+import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import org.apache.ibatis.builder.BaseBuilder;
 import org.apache.ibatis.builder.BuilderException;
 import org.apache.ibatis.mapping.SqlSource;
@@ -63,7 +64,7 @@ import java.util.WeakHashMap;
  *
  * @author nieqiurong
  * @see XMLScriptBuilder
- * @since 3.5.3
+ * @since 3.5.3.2
  */
 public class MybatisXMLScriptBuilder extends BaseBuilder {
 
@@ -114,7 +115,12 @@ public class MybatisXMLScriptBuilder extends BaseBuilder {
         if (str == null) {
             return null;
         }
-        return CACHE_STRING.computeIfAbsent(str, WeakReference::new).get();
+        String value = CACHE_STRING.computeIfAbsent(str, WeakReference::new).get();
+        //增强安全处理一下,如果实在是GC处理掉了(可能性小),就返回原来.
+        if (StringUtils.isNotBlank(value)) {
+            return value;
+        }
+        return str;
     }
 
 
@@ -143,20 +149,6 @@ public class MybatisXMLScriptBuilder extends BaseBuilder {
             }
         }
         return new MixedSqlNode(contents);
-    }
-
-    static class WrapperXnode {
-
-        private final XNode xNode;
-
-        WrapperXnode(XNode xNode) {
-            this.xNode = xNode;
-        }
-
-        public String getStringBody(String def) {
-            return xNode.getStringBody(def);
-        }
-
     }
 
     private interface NodeHandler {
