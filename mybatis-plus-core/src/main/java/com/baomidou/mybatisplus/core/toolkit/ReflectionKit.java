@@ -16,6 +16,7 @@
 package com.baomidou.mybatisplus.core.toolkit;
 
 import com.baomidou.mybatisplus.core.toolkit.reflect.GenericTypeUtils;
+import com.baomidou.mybatisplus.core.toolkit.reflect.TypeParameterResolver;
 
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
@@ -68,7 +69,9 @@ public final class ReflectionKit {
      * @param entity    实体
      * @param fieldName 字段名称
      * @return 属性值
+     * @deprecated 3.5.4
      */
+    @Deprecated
     public static Object getFieldValue(Object entity, String fieldName) {
         Class<?> cls = entity.getClass();
         Map<String, Field> fieldMaps = getFieldMap(cls);
@@ -93,9 +96,13 @@ public final class ReflectionKit {
      * @return Class
      */
     public static Class<?> getSuperClassGenericType(final Class<?> clazz, final Class<?> genericIfc, final int index) {
-        //update by noear @2021-09-03
-        Class<?>[] typeArguments = GenericTypeUtils.resolveTypeArguments(ClassUtils.getUserClass(clazz), genericIfc);
-        return null == typeArguments ? null : typeArguments[index];
+        // 这里泛型逻辑提取进行了调整,如果在Spring项目情况或者自定义了泛型提取,那就优先走这里,否则使用框架内置的进行泛型提取.
+        Class<?> userClass = ClassUtils.getUserClass(clazz);
+        if (GenericTypeUtils.hasGenericTypeResolver()) {
+            Class<?>[] typeArguments = GenericTypeUtils.resolveTypeArguments(userClass, genericIfc);
+            return null == typeArguments ? null : typeArguments[index];
+        }
+        return (Class<?>) TypeParameterResolver.resolveClassIndexedParameter(userClass, genericIfc, index);
     }
 
     /**
@@ -188,7 +195,9 @@ public final class ReflectionKit {
      * @param object 可访问的对象
      * @param <T>    类型
      * @return 返回设置后的对象
+     * @deprecated 3.5.4 {@link java.security.AccessController}
      */
+    @Deprecated
     public static <T extends AccessibleObject> T setAccessible(T object) {
         return AccessController.doPrivileged(new SetAccessibleAction<>(object));
     }

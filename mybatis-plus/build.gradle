@@ -6,14 +6,14 @@ dependencies {
     api "${lib.mybatis}"
     api "${lib.'jsqlparser'}"
 
-    // TODO 这个后面优化到mybatis-plus-boot-starter里面把,非spring项目不需要这个.
-    api "${lib."mybatis-spring"}"
+    implementation "${lib."mybatis-spring"}"
 
     testImplementation "${lib.'spring-web'}"
     testImplementation "${lib.'javax.servlet-api'}"
 
     testImplementation "${lib.'spring-test'}"
-
+    testImplementation "${lib.'spring-aop'}"
+    testImplementation "${lib.'aspectjweaver'}"
     testImplementation "${lib."jackson"}"
     testImplementation "${lib."fastjson"}"
     testImplementation "${lib."gson"}"

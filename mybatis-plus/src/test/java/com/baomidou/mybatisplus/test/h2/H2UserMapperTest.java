@@ -15,22 +15,34 @@
  */
 package com.baomidou.mybatisplus.test.h2;
 
+import com.baomidou.mybatisplus.core.batch.MybatisBatch;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import com.baomidou.mybatisplus.core.toolkit.MybatisBatchUtils;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.test.h2.entity.H2User;
 import com.baomidou.mybatisplus.test.h2.entity.SuperEntity;
 import com.baomidou.mybatisplus.test.h2.enums.AgeEnum;
 import com.baomidou.mybatisplus.test.h2.mapper.H2UserMapper;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.apache.ibatis.executor.BatchResult;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +63,232 @@ class H2UserMapperTest extends BaseTest {
 
     @Resource
     protected H2UserMapper userMapper;
+
+    @Autowired
+    private SqlSessionFactory sqlSessionFactory;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+
+    @Test
+    void testBatchTransaction() {
+        List<H2User> h2UserList = Arrays.asList(new H2User(1000036L, "测试12323232"), new H2User(10000367L, "测试3323232"));
+        try {
+            transactionTemplate.execute((TransactionCallback<List<BatchResult>>) status -> {
+                MybatisBatch.Method<H2User> mapperMethod = new MybatisBatch.Method<>(H2UserMapper.class);
+                // 执行批量插入
+                MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, mapperMethod.insert());
+                throw new RuntimeException("出错了");
+            });
+        } catch (Exception exception) {
+            for (H2User h2User : h2UserList) {
+                Assertions.assertNull(userMapper.selectById(h2User.getTestId()));
+            }
+        }
+        transactionTemplate.execute(status -> {
+            MybatisBatch.Method<H2User> mapperMethod = new MybatisBatch.Method<>(H2UserMapper.class);
+            // 执行批量插入
+            return MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, mapperMethod.insert());
+        });
+        for (H2User h2User : h2UserList) {
+            Assertions.assertNotNull(userMapper.selectById(h2User.getTestId()));
+        }
+    }
+
+    @Test
+    void testInsertBatch() {
+        int batchSize = 1000;
+        List<H2User> h2UserList = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            h2UserList.add(new H2User("test" + i));
+        }
+        MybatisBatch.Method<H2User> mapperMethod = new MybatisBatch.Method<>(H2UserMapper.class);
+        // 执行批量插入
+        List<BatchResult> batchResults = MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, mapperMethod.insert());
+        int[] updateCounts = batchResults.get(0).getUpdateCounts();
+        Assertions.assertEquals(batchSize, updateCounts.length);
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(1, updateCount);
+        }
+
+        List<Long> ids = Arrays.asList(120000L, 120001L);
+        MybatisBatch.Method<H2User> method = new MybatisBatch.Method<>(H2UserMapper.class);
+        MybatisBatchUtils.execute(sqlSessionFactory, ids, method.insert(H2User::ofId));
+    }
+
+    @Test
+    void testInsertBatchByCustomMethod() {
+        int batchSize = 1000;
+        List<BatchResult> batchResults;
+        int[] updateCounts;
+        List<H2User> h2UserList = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            h2UserList.add(new H2User("myInsertWithoutParam" + i));
+        }
+        MybatisBatch.Method<H2User> method = new MybatisBatch.Method<>(H2UserMapper.class);
+        // 执行批量插入
+        batchResults = MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, method.get("myInsertWithoutParam"));
+        updateCounts = batchResults.get(0).getUpdateCounts();
+        Assertions.assertEquals(batchSize, updateCounts.length);
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(1, updateCount);
+        }
+
+        h2UserList = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            h2UserList.add(new H2User("myInsertWithParam" + i));
+        }
+        // 执行批量插入
+        batchResults = MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, method.get("myInsertWithParam", parameter -> Map.of("user1", parameter)));
+        updateCounts = batchResults.get(0).getUpdateCounts();
+        Assertions.assertEquals(batchSize, updateCounts.length);
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(1, updateCount);
+        }
+
+        h2UserList = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            h2UserList.add(new H2User("myInsertWithParam" + i));
+        }
+        batchResults = MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, method.get("myInsertWithParam", parameter -> Map.of("user1", parameter)));
+        updateCounts = batchResults.get(0).getUpdateCounts();
+        Assertions.assertEquals(batchSize, updateCounts.length);
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(1, updateCount);
+        }
+    }
+
+    @Test
+    void testDeleteByIds() {
+        List<BatchResult> batchResults;
+        int batchSize = 1000;
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            ids.add((long) 7120000 + i);
+        }
+        List<H2User> userList = new ArrayList<>();
+        MybatisBatch.Method<H2User> method = new MybatisBatch.Method<>(H2UserMapper.class);
+        // 转换成实体进行逻辑删除
+        batchResults = MybatisBatchUtils.execute(sqlSessionFactory, ids, method.deleteById(id -> {
+            H2User h2User = H2User.ofId(id);
+            userList.add(h2User);
+            return h2User;
+        }));
+        int[] updateCounts = batchResults.get(0).getUpdateCounts();
+        Assertions.assertEquals(batchSize, updateCounts.length);
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(0, updateCount);
+        }
+        for (H2User h2User : userList) {
+            Assertions.assertNotNull(h2User.getLastUpdatedDt());
+        }
+        // 不能走填充
+        batchResults = MybatisBatchUtils.execute(sqlSessionFactory, ids, method.deleteById());
+        updateCounts = batchResults.get(0).getUpdateCounts();
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(0, updateCount);
+        }
+    }
+
+    @Test
+    void testUpdateBatch() {
+        int batchSize = 1000;
+        List<H2User> h2UserList = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            h2UserList.add(new H2User(Long.valueOf(30000 + i), "test" + i));
+        }
+        MybatisBatch.Method<H2User> mapperMethod = new MybatisBatch.Method<>(H2UserMapper.class);
+        // 执行批量更新
+        List<BatchResult> batchResults = MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, mapperMethod.updateById());
+        int[] updateCounts = batchResults.get(0).getUpdateCounts();
+        Assertions.assertEquals(batchSize, updateCounts.length);
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(0, updateCount);
+        }
+
+        List<Long> ids = Arrays.asList(120000L, 120001L);
+        MybatisBatch.Method<H2User> method = new MybatisBatch.Method<>(H2UserMapper.class);
+
+        MybatisBatchUtils.execute(sqlSessionFactory, ids, method.update(id -> Wrappers.<H2User>lambdaUpdate().set(H2User::getName, "updateTest").eq(H2User::getTestId, id)));
+        MybatisBatchUtils.execute(sqlSessionFactory, ids, method.update(id -> new H2User().setName("updateTest2"), id -> Wrappers.<H2User>lambdaUpdate().eq(H2User::getTestId, id)));
+
+        MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, method.update(user -> Wrappers.<H2User>update().set("name", "updateTest3").eq("test_id", user.getTestId())));
+        MybatisBatchUtils.execute(sqlSessionFactory, h2UserList, method.update(user -> new H2User("updateTests4"), p -> Wrappers.<H2User>update().eq("test_id", p.getTestId())));
+    }
+
+    @Test
+    void testSaveOrUpdateBatch1() {
+        int batchSize = 10;
+        List<H2User> h2UserList = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            h2UserList.add(new H2User(Long.valueOf(40000 + i), "test" + i));
+        }
+        MybatisBatch.Method<H2User> mapperMethod = new MybatisBatch.Method<>(H2UserMapper.class);
+        List<BatchResult> batchResults = MybatisBatchUtils.saveOrUpdate(sqlSessionFactory, h2UserList,
+                mapperMethod.insert(),
+                ((sqlSession, h2User) -> userMapper.selectById(h2User.getTestId()) == null),
+                mapperMethod.updateById());
+        // 没有使用共享的sqlSession,由于都是新增返回还是一个批次
+        int[] updateCounts = batchResults.get(0).getUpdateCounts();
+        Assertions.assertEquals(batchSize, updateCounts.length);
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(1, updateCount);
+        }
+    }
+
+    @Test
+    void testSaveOrUpdateBatch2() {
+        int batchSize = 10;
+        List<H2User> h2UserList = new ArrayList<>();
+        for (int i = 0; i < batchSize; i++) {
+            h2UserList.add(new H2User(Long.valueOf(50000 + i), "test" + i));
+        }
+        MybatisBatch.Method<H2User> mapperMethod = new MybatisBatch.Method<>(H2UserMapper.class);
+        List<BatchResult> batchResults = MybatisBatchUtils.saveOrUpdate(sqlSessionFactory, h2UserList,
+                mapperMethod.insert(),
+                ((sqlSession, h2User) -> sqlSession.selectList(H2UserMapper.class.getName() + ".selectById", h2User.getTestId()).isEmpty()),
+                mapperMethod.updateById());
+        // 使用共享的sqlSession,等于每次都是刷新了,批次总结果集就等于数据大小了
+        Assertions.assertEquals(batchSize, batchResults.size());
+        for (BatchResult batchResult : batchResults) {
+            Assertions.assertEquals(batchResult.getUpdateCounts().length, 1);
+            Assertions.assertEquals(1, batchResult.getUpdateCounts()[0]);
+        }
+    }
+
+    @Test
+    void testSaveOrUpdateBatch3() {
+        var id = IdWorker.getId();
+        var h2UserList = List.of(new H2User(id, "testSaveOrUpdateBatch3"), new H2User(id, "testSaveOrUpdateBatch3-1"));
+        var mapperMethod = new MybatisBatch.Method<H2User>(H2UserMapper.class);
+        // 由于没有共享一个sqlSession,第二条记录selectById的时候第一个sqlSession的数据还没提交,会执行插入导致主键冲突.
+        Assertions.assertThrowsExactly(PersistenceException.class, () -> {
+            MybatisBatchUtils.saveOrUpdate(sqlSessionFactory, h2UserList,
+                mapperMethod.insert(),
+                ((sqlSession, h2User) -> userMapper.selectById(h2User.getTestId()) == null),
+                mapperMethod.updateById());
+        });
+
+    }
+
+    @Test
+    void testSaveOrUpdateBatch4() {
+        var id = IdWorker.getId();
+        var h2UserList = List.of(new H2User(id, "testSaveOrUpdateBatch4"), new H2User(id, "testSaveOrUpdateBatch4-1"));
+        var mapperMethod = new MybatisBatch.Method<H2User>(H2UserMapper.class);
+        // 共享一个sqlSession,每次selectById都会刷新一下,第二条记录为update.
+        var batchResults = MybatisBatchUtils.saveOrUpdate(sqlSessionFactory, h2UserList,
+            mapperMethod.insert(),
+            ((sqlSession, h2User) -> sqlSession.selectList(mapperMethod.get("selectById").getStatementId(), h2User.getTestId()).isEmpty()),
+            mapperMethod.updateById());
+        var updateCounts = batchResults.get(0).getUpdateCounts();
+        for (int updateCount : updateCounts) {
+            Assertions.assertEquals(1, updateCount);
+        }
+        Assertions.assertEquals(userMapper.selectById(id).getName(), "testSaveOrUpdateBatch4-1");
+    }
+
 
     @Test
     @Order(1)
@@ -110,9 +348,9 @@ class H2UserMapperTest extends BaseTest {
         h2User.setAge(AgeEnum.THREE);
         h2User.setDesc(null);
         Assertions.assertTrue(userMapper.update(h2User,
-            new UpdateWrapper<H2User>().lambda()
-                .set(H2User::getDesc, "")
-                .eq(H2User::getName, "Jerry")) > 0);
+                new UpdateWrapper<H2User>().lambda()
+                        .set(H2User::getDesc, "")
+                        .eq(H2User::getName, "Jerry")) > 0);
 
         log(userMapper.selectOne(new QueryWrapper<>(new H2User().setName(NQQ).setAge(AgeEnum.THREE))));
 
@@ -166,7 +404,7 @@ class H2UserMapperTest extends BaseTest {
     @Order(Integer.MAX_VALUE)
     void delete() {
         userMapper.delete(new QueryWrapper<>(new H2User().setAge(AgeEnum.TWO))
-            .eq("name", "Tony"));
+                .eq("name", "Tony"));
     }
 
     @Test
@@ -177,14 +415,14 @@ class H2UserMapperTest extends BaseTest {
         int insertCount = userMapper.insert(new H2User().setName(name).setAge(AgeEnum.ONE));
         Assertions.assertEquals(1, insertCount);
         int updateCount = userMapper.update(new H2User(),
-            new UpdateWrapper<H2User>().comment("updateUserName1").lambda()
-                .set(H2User::getName, nameNew)
-                .eq(H2User::getName, name)
+                new UpdateWrapper<H2User>().comment("updateUserName1").lambda()
+                        .set(H2User::getName, nameNew)
+                        .eq(H2User::getName, name)
         );
         Assertions.assertEquals(1, updateCount);
         H2User h2User = userMapper.selectOne(
-            new QueryWrapper<H2User>().lambda().comment("getUserByUniqueName")
-                .eq(H2User::getName, nameNew)
+                new QueryWrapper<H2User>().lambda().comment("getUserByUniqueName")
+                        .eq(H2User::getName, nameNew)
         );
         Assertions.assertNotNull(h2User);
         LambdaQueryWrapper<H2User> queryWrapper = new QueryWrapper<H2User>().lambda().ge(H2User::getAge, 1);
@@ -203,7 +441,7 @@ class H2UserMapperTest extends BaseTest {
     }
 
     @Test
-    void test(){
+    void test() {
         Page<H2User> page = new Page<>();
         userMapper.testPage1(new H2User(), page);
         userMapper.testPage2(page, new H2User());
@@ -214,4 +452,14 @@ class H2UserMapperTest extends BaseTest {
         Long count = userMapper.selectCountLong();
         System.out.println(count);
     }
+
+    @Test
+    void testUpdateByWrapper() {
+        var h2User = new H2User();
+        userMapper.insert(h2User);
+        var wrapper = Wrappers.<H2User>lambdaUpdate().set(H2User::getName, "testUpdateByWrapper").eq(H2User::getTestId, h2User.getTestId());
+        Assertions.assertEquals(userMapper.update(wrapper), 1);
+        Assertions.assertEquals(userMapper.selectById(h2User.getTestId()).getName(), "testUpdateByWrapper");
+    }
+
 }

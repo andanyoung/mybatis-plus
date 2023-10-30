@@ -26,7 +26,11 @@ import com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import org.apache.ibatis.executor.ErrorContext;
 import org.apache.ibatis.executor.parameter.ParameterHandler;
-import org.apache.ibatis.mapping.*;
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.ParameterMapping;
+import org.apache.ibatis.mapping.ParameterMode;
+import org.apache.ibatis.mapping.SqlCommandType;
 import org.apache.ibatis.reflection.MetaObject;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.type.JdbcType;
@@ -43,8 +47,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 自定义 ParameterHandler 重装构造函数，填充插入方法主键 ID
@@ -54,6 +60,13 @@ import java.util.Map;
  */
 public class MybatisParameterHandler implements ParameterHandler {
 
+    /**
+     * 填充的key值
+     *
+     * @since 3.5.3.2
+     * @deprecated 3.5.4
+     */
+    @Deprecated
     public static final String[] COLLECTION_KEYS = new String[]{"collection", "coll", "list", "array"};
 
     private final TypeHandlerRegistry typeHandlerRegistry;
@@ -219,25 +232,24 @@ public class MybatisParameterHandler implements ParameterHandler {
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Collection<Object> extractParameters(Object parameterObject) {
-        Collection<Object> parameters = new ArrayList<>();
         if (parameterObject instanceof Collection) {
-            parameters = (Collection) parameterObject;
+            return (Collection) parameterObject;
         } else if (ArrayUtils.isArray(parameterObject)) {
-            parameters = toCollection(parameterObject);
+            return toCollection(parameterObject);
         } else if (parameterObject instanceof Map) {
-            Map parameterMap = (Map) parameterObject;
-            if (parameterMap.containsKey(Constants.ENTITY)) {
-                parameters.add(parameterMap.get(Constants.ENTITY));
-            }
-            for (String key : COLLECTION_KEYS) {
-                if (parameterMap.containsKey(key)) {
-                    parameters.addAll(toCollection(parameterMap.get(key)));
+            Collection<Object> parameters = new ArrayList<>();
+            Map<String, Object> parameterMap = (Map) parameterObject;
+            Set<Object> objectSet = new HashSet<>();
+            parameterMap.forEach((k, v) -> {
+                if (objectSet.add(v)) {
+                    Collection<Object> collection = toCollection(v);
+                    parameters.addAll(collection);
                 }
-            }
+            });
+            return parameters;
         } else {
-            parameters.add(parameterObject);
+            return Collections.singleton(parameterObject);
         }
-        return parameters;
     }
 
     @SuppressWarnings("unchecked")
@@ -245,13 +257,13 @@ public class MybatisParameterHandler implements ParameterHandler {
         if (value == null) {
             return Collections.emptyList();
         }
-        // 只处理array和collection
         if (ArrayUtils.isArray(value)) {
             return Arrays.asList((Object[]) value);
         } else if (Collection.class.isAssignableFrom(value.getClass())) {
             return (Collection<Object>) value;
+        } else {
+            return Collections.singletonList(value);
         }
-        return Collections.emptyList();
     }
 
     @Override

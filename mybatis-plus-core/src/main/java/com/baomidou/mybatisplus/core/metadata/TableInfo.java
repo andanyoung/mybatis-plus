@@ -30,8 +30,11 @@ import org.apache.ibatis.mapping.ResultMapping;
 import org.apache.ibatis.reflection.Reflector;
 import org.apache.ibatis.session.Configuration;
 
-import java.lang.reflect.Constructor;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
@@ -177,7 +180,7 @@ public class TableInfo implements Constants {
      * 排序列表
      */
     @Setter
-    private List<TableFieldInfo> orderByFields;
+    private List<OrderFieldInfo> orderByFields;
 
     /**
      * @since 3.4.4
@@ -326,7 +329,23 @@ public class TableInfo implements Constants {
      * @return sql 脚本片段
      */
     public String getAllInsertSqlPropertyMaybeIf(final String prefix) {
+        return getAllInsertSqlPropertyMaybeIf(prefix, false);
+    }
+
+    /**
+     * 获取所有 insert 时候插入值 sql 脚本片段
+     *
+     * @param prefix                    前缀
+     * @param ignoreAutoIncrementColumn 是否忽略自增主键字段
+     * @return sql 脚本片段
+     * @since 3.5.4
+     */
+    public String getAllInsertSqlPropertyMaybeIf(final String prefix, boolean ignoreAutoIncrementColumn) {
         final String newPrefix = prefix == null ? EMPTY : prefix;
+        if (ignoreAutoIncrementColumn) {
+            return fieldList.stream()
+                .map(i -> i.getInsertSqlPropertyMaybeIf(newPrefix)).filter(Objects::nonNull).collect(joining(NEWLINE));
+        }
         return getKeyInsertSqlProperty(false, newPrefix, true) + fieldList.stream()
             .map(i -> i.getInsertSqlPropertyMaybeIf(newPrefix)).filter(Objects::nonNull).collect(joining(NEWLINE));
     }
@@ -341,7 +360,23 @@ public class TableInfo implements Constants {
      * @return sql 脚本片段
      */
     public String getAllInsertSqlColumnMaybeIf(final String prefix) {
+        return getAllInsertSqlColumnMaybeIf(prefix, false);
+    }
+
+    /**
+     * 获取 insert 时候字段 sql 脚本片段
+     *
+     * @param prefix                    前缀
+     * @param ignoreAutoIncrementColumn 是否忽略自增主键字段
+     * @return sql脚本内容
+     * @since 3.5.4
+     */
+    public String getAllInsertSqlColumnMaybeIf(final String prefix, boolean ignoreAutoIncrementColumn) {
         final String newPrefix = prefix == null ? EMPTY : prefix;
+        if (ignoreAutoIncrementColumn) {
+            return fieldList.stream().map(i -> i.getInsertSqlColumnMaybeIf(newPrefix))
+                .filter(Objects::nonNull).collect(joining(NEWLINE));
+        }
         return getKeyInsertSqlColumn(false, newPrefix, true) + fieldList.stream().map(i -> i.getInsertSqlColumnMaybeIf(newPrefix))
             .filter(Objects::nonNull).collect(joining(NEWLINE));
     }
@@ -471,9 +506,6 @@ public class TableInfo implements Constants {
             if (i.isWithUpdateFill()) {
                 this.withUpdateFill = true;
             }
-            if (i.isOrderBy()) {
-                this.getOrderByFields().add(i);
-            }
             if (i.isVersion()) {
                 this.withVersion = true;
                 this.versionFieldInfo = i;
@@ -489,7 +521,7 @@ public class TableInfo implements Constants {
         return Collections.unmodifiableList(fieldList);
     }
 
-    public List<TableFieldInfo> getOrderByFields() {
+    public List<OrderFieldInfo> getOrderByFields() {
         if (null == this.orderByFields) {
             this.orderByFields = new LinkedList<>();
         }
@@ -542,15 +574,7 @@ public class TableInfo implements Constants {
      */
     @SuppressWarnings("unchecked")
     public <T> T newInstance() {
-        Constructor<?> defaultConstructor = reflector.getDefaultConstructor();
-        if (!defaultConstructor.isAccessible()) {
-            defaultConstructor.setAccessible(true);
-        }
-        try {
-            return (T) defaultConstructor.newInstance();
-        } catch (ReflectiveOperationException e) {
-            throw ExceptionUtils.mpe(e);
-        }
+        return (T) configuration.getObjectFactory().create(entityType);
     }
 
 }

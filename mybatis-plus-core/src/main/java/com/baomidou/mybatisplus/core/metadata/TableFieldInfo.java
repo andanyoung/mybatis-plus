@@ -52,7 +52,6 @@ import java.util.Map;
 @Getter
 @ToString
 @EqualsAndHashCode
-@SuppressWarnings("serial")
 public class TableFieldInfo implements Constants {
 
     /**
@@ -192,13 +191,12 @@ public class TableFieldInfo implements Constants {
     /**
      * 全新的 存在 TableField 注解时使用的构造函数
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public TableFieldInfo(GlobalConfig globalConfig, TableInfo tableInfo, Field field, TableField tableField,
                           Reflector reflector, boolean existTableLogic, boolean isOrderBy) {
         this(globalConfig, tableInfo, field, tableField, reflector, existTableLogic);
         this.isOrderBy = isOrderBy;
         if (isOrderBy) {
-            initOrderBy(globalConfig.getAnnotationHandler().getAnnotation(field, OrderBy.class));
+            initOrderBy(tableInfo, globalConfig.getAnnotationHandler().getAnnotation(field, OrderBy.class));
         }
     }
 
@@ -327,7 +325,7 @@ public class TableFieldInfo implements Constants {
         this(globalConfig, tableInfo, field, reflector, existTableLogic);
         this.isOrderBy = isOrderBy;
         if (isOrderBy) {
-            initOrderBy(globalConfig.getAnnotationHandler().getAnnotation(field, OrderBy.class));
+            initOrderBy(tableInfo, globalConfig.getAnnotationHandler().getAnnotation(field, OrderBy.class));
         }
     }
 
@@ -383,17 +381,15 @@ public class TableFieldInfo implements Constants {
     /**
      * 排序初始化
      *
+     * @param tableInfo 表信息
      * @param orderBy 排序注解
      */
-    private void initOrderBy(OrderBy orderBy) {
+    private void initOrderBy(TableInfo tableInfo, OrderBy orderBy) {
         if (null != orderBy) {
             this.isOrderBy = true;
             this.orderBySort = orderBy.sort();
-            String _orderBy = Constants.DESC;
-            if (orderBy.asc()) {
-                _orderBy = Constants.ASC;
-            }
-            this.orderByType = _orderBy;
+            this.orderByType = orderBy.asc() ? Constants.ASC : Constants.DESC;
+            tableInfo.getOrderByFields().add(new OrderFieldInfo(this.getColumn(), orderBy.asc(), orderBy.sort()));
         } else {
             this.isOrderBy = false;
         }
